@@ -92,15 +92,19 @@ jobs:
           git commit -m "Jobs updated (location feed)" || exit 0
           git push
 
-      - name: Create alert Issue (emails you via @mention)
+           - name: Create alert Issue (emails you via @mention)
         if: steps.diff.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python - <<'PY'
-          import json, pathlib
-          jobs = json.loads(pathlib.Path("last_snapshot.json").read_text())
-          lines = []
-          for j in jobs[:15]:
-            lines.append(f"- {j.get('jobTitle')} — {j.get('locationName') or j.get('city') or ''} ({j.get('postalCode') or ''})")
-          body = "@YOUR_GITHUB_USERNAME\n\n🟢 Jobs changed for your location feed.\n\nTop results:\n" + "\
+          echo "@baddamarun" > issue_body.txt
+          echo "" >> issue_body.txt
+          echo "🟢 Jobs changed for your location feed." >> issue_body.txt
+          echo "" >> issue_body.txt
+          echo "Open the repo to view the latest snapshot:" >> issue_body.txt
+          echo "- last_snapshot.json" >> issue_body.txt
+
+          gh issue create \
+            --title "🟢 Amazon jobs updated (location feed)" \
+            --body-file issue_body.txt \
+            --label "job-alert" || true
