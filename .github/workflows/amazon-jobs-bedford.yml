@@ -2,7 +2,7 @@ name: Amazon Jobs Location Monitor
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # every 30 minutes
+    - cron: "*/15 * * * *"   # every 30 minutes
   workflow_dispatch:
 
 jobs:
@@ -28,7 +28,7 @@ jobs:
                 "country": "United Kingdom",
                 "pageSize": 100,
                 "consolidateSchedule": true,
-                "geoQueryClause": { "lat": 52.117190599496, "lng": -0.483199702801, "unit": "mi", "distance": 50 }
+                "geoQueryClause": { "lat": 52.1364, "lng": -0.4607, "unit": "mi", "distance": 30 }
               }
             }
           }
