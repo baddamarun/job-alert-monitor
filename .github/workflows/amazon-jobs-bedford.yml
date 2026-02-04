@@ -72,7 +72,12 @@ jobs:
       - name: Detect changes
         id: diff
         run: |
-          echo "changed=true" >> $GITHUB_OUTPUT
+          if [ -f last_snapshot.sha ] && cmp -s snapshot.sha last_snapshot.sha; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
 
 
       - name: Save latest snapshot
