@@ -69,14 +69,11 @@ jobs:
           pathlib.Path("snapshot.sha").write_text(hashlib.sha256(text.encode("utf-8")).hexdigest())
           PY
 
-      - name: Detect changes
+         - name: Detect changes
         id: diff
         run: |
-          if [ -f last_snapshot.sha ] && cmp -s snapshot.sha last_snapshot.sha; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
-          fi
+          echo "changed=true" >> $GITHUB_OUTPUT
+
 
       - name: Save latest snapshot
         run: |
