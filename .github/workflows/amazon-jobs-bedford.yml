@@ -1,0 +1,106 @@
+name: Amazon Jobs Location Monitor
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 minutes
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Query Amazon jobs GraphQL (location-based)
+        run: |
+          cat > payload.json <<'JSON'
+          {
+            "operationName": "searchJobCardsByLocation",
+            "query": "query searchJobCardsByLocation($searchJobRequest: SearchJobRequest!) { searchJobCardsByLocation(searchJobRequest: $searchJobRequest) { nextToken jobCards { jobId jobTitle jobType employmentType city state postalCode locationName distance tagLine bannerText urlNextStep __typename } __typename } }",
+            "variables": {
+              "searchJobRequest": {
+                "locale": "en-GB",
+                "country": "United Kingdom",
+                "pageSize": 100,
+                "consolidateSchedule": true,
+                "geoQueryClause": { "lat": 52.117190599496, "lng": -0.483199702801, "unit": "mi", "distance": 50 }
+              }
+            }
+          }
+          JSON
+
+          curl -sS -X POST "https://qy64m4juabaffl7tjakii4gdoa.appsync-api.eu-west-1.amazonaws.com/graphql" \
+            -H "content-type: application/json" \
+            -H "user-agent: Mozilla/5.0" \
+            --data-binary @payload.json \
+            -o response.json
+
+      - name: Build stable snapshot (only jobId + title + location)
+        run: |
+          python - <<'PY'
+          import json, hashlib, pathlib
+
+          data = json.loads(pathlib.Path("response.json").read_text())
+          cards = (((data.get("data") or {}).get("searchJobCardsByLocation") or {}).get("jobCards") or [])
+
+          # Keep only stable fields
+          simplified = [
+              {
+                  "jobId": c.get("jobId"),
+                  "jobTitle": c.get("jobTitle"),
+                  "locationName": c.get("locationName"),
+                  "postalCode": c.get("postalCode"),
+                  "city": c.get("city"),
+                  "distance": c.get("distance"),
+              }
+              for c in cards
+              if c.get("jobId")
+          ]
+
+          simplified.sort(key=lambda x: (x["jobId"] or ""))
+
+          text = json.dumps(simplified, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+          pathlib.Path("snapshot.json").write_text(text)
+          pathlib.Path("snapshot.sha").write_text(hashlib.sha256(text.encode("utf-8")).hexdigest())
+          PY
+
+      - name: Detect changes
+        id: diff
+        run: |
+          if [ -f last_snapshot.sha ] && cmp -s snapshot.sha last_snapshot.sha; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Save latest snapshot
+        run: |
+          mv snapshot.json last_snapshot.json
+          mv snapshot.sha last_snapshot.sha
+
+      - name: Commit snapshot if changed
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "Job Monitor Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add last_snapshot.json last_snapshot.sha
+          git commit -m "Jobs updated (location feed)" || exit 0
+          git push
+
+      - name: Create alert Issue (emails you via @mention)
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          jobs = json.loads(pathlib.Path("last_snapshot.json").read_text())
+          lines = []
+          for j in jobs[:15]:
+            lines.append(f"- {j.get('jobTitle')} — {j.get('locationName') or j.get('city') or ''} ({j.get('postalCode') or ''})")
+          body = "@YOUR_GITHUB_USERNAME\n\n🟢 Jobs changed for your location feed.\n\nTop results:\n" + "\
