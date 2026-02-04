@@ -21,7 +21,7 @@ jobs:
           cat > payload.json <<'JSON'
           {
             "operationName": "searchJobCardsByLocation",
-            "query": "query searchJobCardsByLocation($searchJobRequest: SearchJobRequest!) { searchJobCardsByLocation(searchJobRequest: $searchJobRequest) { nextToken jobCards { jobId jobTitle jobType employmentType city state postalCode locationName distance tagLine bannerText urlNextStep __typename } __typename } }",
+            "query": "query searchJobCardsByLocation($searchJobRequest: SearchJobRequest!) { searchJobCardsByLocation(searchJobRequest: $searchJobRequest) { nextToken jobCards { jobId jobTitle jobType employmentType city state postalCode locationName distance tagLine bannerText __typename } __typename } }",
             "variables": {
               "searchJobRequest": {
                 "locale": "en-GB",
@@ -40,7 +40,7 @@ jobs:
             --data-binary @payload.json \
             -o response.json
 
-      - name: Build stable snapshot (only jobId + title + location)
+      - name: Build stable snapshot (jobId + title + location)
         run: |
           python - <<'PY'
           import json, hashlib, pathlib
@@ -48,21 +48,21 @@ jobs:
           data = json.loads(pathlib.Path("response.json").read_text())
           cards = (((data.get("data") or {}).get("searchJobCardsByLocation") or {}).get("jobCards") or [])
 
-          # Keep only stable fields
-          simplified = [
-              {
-                  "jobId": c.get("jobId"),
-                  "jobTitle": c.get("jobTitle"),
-                  "locationName": c.get("locationName"),
-                  "postalCode": c.get("postalCode"),
-                  "city": c.get("city"),
-                  "distance": c.get("distance"),
-              }
-              for c in cards
-              if c.get("jobId")
-          ]
+          simplified = []
+          for c in cards:
+            jid = c.get("jobId")
+            if not jid:
+              continue
+            simplified.append({
+              "jobId": jid,
+              "jobTitle": c.get("jobTitle"),
+              "locationName": c.get("locationName"),
+              "postalCode": c.get("postalCode"),
+              "city": c.get("city"),
+              "distance": c.get("distance"),
+            })
 
-          simplified.sort(key=lambda x: (x["jobId"] or ""))
+          simplified.sort(key=lambda x: x["jobId"])
 
           text = json.dumps(simplified, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
           pathlib.Path("snapshot.json").write_text(text)
@@ -92,7 +92,7 @@ jobs:
           git commit -m "Jobs updated (location feed)" || exit 0
           git push
 
-                     - name: Create alert Issue (emails you via @mention)
+      - name: Create alert Issue (emails you via @mention)
         if: steps.diff.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
