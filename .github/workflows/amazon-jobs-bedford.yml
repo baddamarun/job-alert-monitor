@@ -103,5 +103,5 @@ jobs:
 
           gh issue create \
             --title "🟢 Amazon jobs updated (location feed)" \
-            --body-file issue_body.txt \
-            --label "job-alert" || true
+            --body-file issue_body.txt
+
